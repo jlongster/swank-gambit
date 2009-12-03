@@ -1,0 +1,4 @@
+
+This is an initial version of a Gambit Scheme swank backend for SLIME.
+
+Run swank-gambit.scm from the command line, and then type `M-x slime-connect ENT ENT ENT` to get a SLIME prompt.
