@@ -187,7 +187,7 @@
 ;; change REPL-OUTPUT-REDIRECT to #f.
 
 (define REPL-OUTPUT-REDIRECT #t)
-(define (debug) #f)
+(define (debug msg) #f)
 
 (if REPL-OUTPUT-REDIRECT
     (set! ##thread-make-repl-channel
