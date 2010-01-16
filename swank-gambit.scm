@@ -26,6 +26,12 @@
 	(if (p seed) '()
 	    (cons (f seed) (recur (g seed)))))))
 
+(define (take lis k)
+  (let recur ((lis lis) (k k))
+    (if (zero? k) '()
+	(cons (car lis)
+	      (recur (cdr lis) (- k 1))))))
+
 (define (drop lis k)
   (let iter ((lis lis) (k k))
     (if (zero? k) lis (iter (cdr lis) (- k 1)))))
@@ -50,7 +56,7 @@
 
 (define (swank-server-handle)
   (let loop ()
-    (pp '------------------------------------------)
+    (debug '------------------------------------------)
     (let ((req (swank-read)))
       (if (not (eof-object? req))
           (begin
@@ -75,7 +81,7 @@
                        read))))))))
 
 (define (swank-write obj)
-  (pp (list 'emacs<== obj))
+  (debug (list 'emacs<== obj))
   (let* ((obj-str
           (with-output-to-string
             ""
@@ -99,10 +105,10 @@
     (write-substring obj-str 0 (string-length obj-str))
     (force-output)))
 
-(define swank-wire-protocol-version "2009-10-15")
+(define swank-wire-protocol-version 'nil)
 
 (define (swank-process-request req)
-  (pp (list 'emacs==> req))
+  (debug (list 'emacs==> req))
   (if (pair? req)
       (let ((op (car req)))
         (case op
@@ -129,7 +135,7 @@
                                            (list ':ok result)
                                            seqnum)))))
                                 (begin
-                                  (pp (list '***unhandled*** req))
+                                  (debug (list '***unhandled*** req))
                                   (swank-write
                                    (list ':return
                                          '(:abort)
@@ -137,8 +143,56 @@
                   args))))
 
           (else
-           (pp (list '***unhandled*** req)))))
+           (debug (list '***unhandled*** req)))))
       #f))
+
+;; set repl-output-port to send messages to SLIME 
+
+(define (read-substring-blocking-for-1 str start end port)
+  (if (< start end)
+      (begin
+        (input-port-timeout-set! port +inf.0) ;; block for the first byte
+        (let ((n (read-substring str start (+ start 1) port)))
+          (input-port-timeout-set! port -inf.0) ;; don't block for the rest
+          (if (= n 1)
+              (+ 1 (read-substring str (+ start 1) end port))
+              n)))
+      0))
+
+(define (repl-output-reader port)
+  (lambda ()
+    (let* ((buflen 1000)
+           (buf (make-string buflen)))
+      (let loop ()
+        (let ((n (read-substring-blocking-for-1 buf 0 buflen port)))
+          (if (> n 0)
+              (begin
+                (swank-write
+                 `(:write-string ,(substring buf 0 n) :repl-result))
+                (loop))))))))
+
+(define (make-swank-output-port)
+  (let ((port (open-string (list buffering: #f))))
+    (thread-start!
+     (make-thread (repl-output-reader port)))
+    port))
+
+(define (thread-make-swank-repl-channel thread)
+  (let ((port (make-swank-output-port)))
+    (##make-repl-channel-ports port port)))
+
+;; `debug' is the function which logs messages, but we should only
+;; print messages to a repl output if we aren't redirecting repl
+;; output to SLIME. If you want to see debug output in the terminal,
+;; change REPL-OUTPUT-REDIRECT to #f.
+
+(define REPL-OUTPUT-REDIRECT #t)
+(define (debug) #f)
+
+(if REPL-OUTPUT-REDIRECT
+    (set! ##thread-make-repl-channel
+          thread-make-swank-repl-channel)
+    (set! debug (lambda (msg) (pp msg))))
 
 ;;;============================================================================
 
