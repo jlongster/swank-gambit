@@ -9,6 +9,12 @@
 (include "~~lib/_gambit#.scm")
 (macro-readtable-escape-ctrl-chars?-set! ##main-readtable #f)
 
+(define SWANK-DEBUG #f)
+
+(define (debug msg)
+  (if SWANK-DEBUG
+      (pp msg)))
+
 ;;; ===========================================================================
 
 (define (unfold p f g seed . maybe-tail-gen)
@@ -129,7 +135,7 @@
                                      (list ':return
                                            '(:abort)
                                            seqnum)))
-                                   ((not (not result))
+                                   (result
                                     (swank-write
                                      (list ':return
                                            (list ':ok result)
@@ -146,53 +152,17 @@
            (debug (list '***unhandled*** req)))))
       #f))
 
-;; set repl-output-port to send messages to SLIME 
-
-(define (read-substring-blocking-for-1 str start end port)
-  (if (< start end)
-      (begin
-        (input-port-timeout-set! port +inf.0) ;; block for the first byte
-        (let ((n (read-substring str start (+ start 1) port)))
-          (input-port-timeout-set! port -inf.0) ;; don't block for the rest
-          (if (= n 1)
-              (+ 1 (read-substring str (+ start 1) end port))
-              n)))
-      0))
-
-(define (repl-output-reader port)
-  (lambda ()
-    (let* ((buflen 1000)
-           (buf (make-string buflen)))
-      (let loop ()
-        (let ((n (read-substring-blocking-for-1 buf 0 buflen port)))
-          (if (> n 0)
-              (begin
-                (swank-write
-                 `(:write-string ,(substring buf 0 n) :repl-result))
-                (loop))))))))
-
-(define (make-swank-output-port)
-  (let ((port (open-string (list buffering: #f))))
-    (thread-start!
-     (make-thread (repl-output-reader port)))
-    port))
+;; force `repl-input-port` and `repl-output-port` to be the
+;; same as `current-input-port` and `current-output-port`
 
 (define (thread-make-swank-repl-channel thread)
-  (let ((port (make-swank-output-port)))
-    (##make-repl-channel-ports port port)))
+  (##make-repl-channel-ports (current-input-port)
+                             (current-output-port)))
 
-;; `debug' is the function which logs messages, but we should only
-;; print messages to a repl output if we aren't redirecting repl
-;; output to SLIME. If you want to see debug output in the terminal,
-;; change REPL-OUTPUT-REDIRECT to #f.
 
-(define REPL-OUTPUT-REDIRECT #t)
-(define (debug msg) #f)
-
-(if REPL-OUTPUT-REDIRECT
+(if (not SWANK-DEBUG)
     (set! ##thread-make-repl-channel
-          thread-make-swank-repl-channel)
-    (set! debug (lambda (msg) (pp msg))))
+          thread-make-swank-repl-channel))
 
 ;;;============================================================================
 
@@ -241,9 +211,21 @@
   ;; fake it
   'nil)
 
+(define (swank:eval expr)
+  (let ((result #f))
+    (let ((output
+           (with-output-to-string ""
+             (lambda ()
+               (set! result (eval-with-sldb-handler expr))))))
+      (if (not (equal? output ""))
+          (swank-write `(:write-string ,output :repl-result)))
+      (if (exception-result? result)
+          (debug-exception-result result))
+      result)))
+
 (define (swank:listener-eval expr-str)
   (let* ((expr (with-input-from-string expr-str read))
-         (result (eval-with-sldb-handler expr)))
+         (result (swank:eval expr)))
     (cond
      ((exception-result? result) 'abort)
      ((eq? result '#!void) 'nil)
@@ -266,7 +248,7 @@
     (swank-interactive-evaluation expr pretty-print)))
 
 (define (swank-interactive-evaluation expr wr)
-  (let ((result (eval-with-sldb-handler expr)))
+  (let ((result (swank:eval expr)))
     (cond
      ((exception-result? result) 'abort)
      ((eq? result '#!void) "")
@@ -421,9 +403,6 @@
                   (outer-cont (make-exception-result exc cont)))))
              (lambda ()
                (eval expr)))))))
-    
-    (if (exception-result? result)
-        (debug-exception-result result))
     result))
 
 (define (swank:invoke-debugger exc cont)
