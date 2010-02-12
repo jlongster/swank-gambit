@@ -11,6 +11,8 @@
 ;;;============================================================================
 
 (include "~~lib/_gambit#.scm")
+(include "Sort.scm")
+
 (macro-readtable-escape-ctrl-chars?-set! ##main-readtable #f)
 
 (define SWANK-DEBUG #f)
@@ -334,6 +336,40 @@
 
   (apply append (map f (cdr (vector->list (##symbol-table))))))
 
+
+(define (swank:simple-completions prefix package)
+  (define (f sym)
+    (let ((name (symbol->string sym))
+          (prefix-len (string-length prefix)))
+      (if (and (<= prefix-len (string-length name))
+               (string=? (substring name 0 prefix-len) prefix))
+          (list name)
+          '())))
+
+  (let ((strings (apply append (map f (all-symbols)))))
+    (list (sort strings string<?)
+	  (longest-common-prefix strings))))
+
+(define (longest-common-prefix strings)
+  (define (common-prefix s1 s2)
+    (let loop ([i 0])
+      (if (and (< i (string-length s1))
+               (< i (string-length s2))
+               (char=? (string-ref s1 i)
+                       (string-ref s2 i)))
+          (loop (+ i 1))
+          (substring s1 0 i))))
+
+  (define (f prefix strings)
+    (if (null? strings)
+        prefix
+        (f (common-prefix prefix (car strings))
+           (cdr strings))))
+
+  (if (null? strings)
+      ""
+      (f (car strings) (cdr strings))))
+
 ;;;============================================================================
 
 ;;;; SLDB
@@ -501,6 +537,7 @@
 (swank-define-op swank:quit-lisp)
 (swank-define-op swank:completions)
 (swank-define-op swank:backtrace)
+(swank-define-op swank:simple-completions)
 
 ;(swank-define-op swank:connection-info)
 ;(swank-define-op swank:interactive-eval)
