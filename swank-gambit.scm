@@ -217,12 +217,12 @@
   ;; fake it
   'nil)
 
-(define (swank:eval expr)
+(define (swank:do-with-result thunk)
   (let ((result #f))
     (let ((output
            (with-output-to-string ""
              (lambda ()
-               (set! result (eval-with-sldb-handler expr))))))
+               (set! result (do-with-sldb-handler thunk))))))
       (if (not (equal? output ""))
           (swank-write `(:write-string ,output :repl-result)))
       (if (exception-result? result)
@@ -231,7 +231,7 @@
 
 (define (swank:listener-eval expr-str)
   (let* ((expr (with-input-from-string expr-str read))
-         (result (swank:eval expr)))
+         (result (swank:do-with-result (lambda () (eval expr)))))
     (cond
      ((exception-result? result) 'abort)
      ((eq? result '#!void) 'nil)
@@ -243,18 +243,18 @@
 
 (define (swank:interactive-eval expr-str)
   (let ((expr (with-input-from-string expr-str read)))
-    (swank-interactive-evaluation expr write)))
+    (swank-do-interactive write (lambda () (eval expr)))))
 
 (define (swank:interactive-eval-region expr-str)
   (let ((expr (cons 'begin (with-input-from-string expr-str read-all))))
-    (swank-interactive-evaluation expr write)))
+    (swank-do-interactive write (lambda () (eval expr)))))
 
 (define (swank:pprint-eval expr-str)
   (let ((expr (with-input-from-string expr-str read)))
-    (swank-interactive-evaluation expr pretty-print)))
+    (swank-do-interactive pretty-print (lambda () (eval expr)))))
 
-(define (swank-interactive-evaluation expr wr)
-  (let ((result (swank:eval expr)))
+(define (swank-do-interactive thunk wr)
+  (let ((result (swank:do-with-result thunk)))
     (cond
      ((exception-result? result) 'abort)
      ((eq? result '#!void) "")
@@ -429,7 +429,7 @@
 ;;; Evaluate expressions and invoke sldb when an exception occurs.
 ;;; Only do this for exceptions that occur from the eval'ed
 ;;; expression, not any exceptions thrown by swank-gambit code.
-(define (eval-with-sldb-handler expr)
+(define (do-with-sldb-handler thunk)
   (let ((result
          
          ;; Capture the outer continuation so that we can exit from
@@ -441,8 +441,7 @@
                (##continuation-capture
                 (lambda (cont)
                   (outer-cont (make-exception-result exc cont)))))
-             (lambda ()
-               (eval expr)))))))
+             thunk)))))
     result))
 
 (define (swank:invoke-debugger exc cont)
