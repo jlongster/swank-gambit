@@ -647,6 +647,21 @@
       (object->string (continuation-code cont) 40))
     (:restartable nil)))
 
+(define (swank:sldb-return-from-frame frame expr-str)
+  (swank-write
+   `(:debug-return ,(get-thread-id (current-thread)) 1 nil))
+  ;; ##continuation-return means emacs-rex won't get a chance to send
+  ;; a reply for this seqnum, so send it now.  Sending :abort because
+  ;; otherwise SLIME prints spam in the echo area.
+  (swank-write
+   (list ':return '(:abort) (current-seqnum)))
+  (let ((result
+         (swank:do-with-result
+          (lambda () (eval (with-input-from-string expr-str read))))))
+    (##continuation-return
+     (swank-current-continuation frame)
+     result)))
+
 (define current-backtrace (make-parameter #f))
 (define current-toplevel-cont (make-parameter #f))
 (define current-seqnum (make-parameter #f))
@@ -691,6 +706,7 @@
 (swank-define-op swank:pprint-eval-string-in-frame)
 (swank-define-op swank:frame-locals-and-catch-tags)
 (swank-define-op swank:frame-source-location)
+(swank-define-op swank:sldb-return-from-frame)
 
 ;(swank-define-op swank:connection-info)
 ;(swank-define-op swank:interactive-eval)
