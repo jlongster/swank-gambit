@@ -662,6 +662,12 @@
      (swank-current-continuation frame)
      result)))
 
+(define (swank:sldb-disassemble frame)
+  ;; Using ##cmd-i for now, but really should be custom code that
+  ;; highlights the instruction pointer
+  (call-with-output-string
+   "" (lambda (p) (##cmd-i (swank-current-continuation frame) p))))
+
 (define current-backtrace (make-parameter #f))
 (define current-toplevel-cont (make-parameter #f))
 (define current-seqnum (make-parameter #f))
@@ -707,6 +713,7 @@
 (swank-define-op swank:frame-locals-and-catch-tags)
 (swank-define-op swank:frame-source-location)
 (swank-define-op swank:sldb-return-from-frame)
+(swank-define-op swank:sldb-disassemble)
 
 ;(swank-define-op swank:connection-info)
 ;(swank-define-op swank:interactive-eval)
