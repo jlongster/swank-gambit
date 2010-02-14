@@ -234,8 +234,9 @@
       result)))
 
 (define (swank:listener-eval expr-str)
-  (let* ((expr (with-input-from-string expr-str read))
-         (result (swank:do-with-result (lambda () (eval expr)))))
+  (let ((result
+         (swank:do-with-result
+          (lambda () (eval (with-input-from-string expr-str read))))))
     (cond
      ((exception-result? result) #f)
      ((eq? result '#!void) 'nil)
@@ -246,16 +247,21 @@
         'nil)))))
 
 (define (swank:interactive-eval expr-str)
-  (let ((expr (with-input-from-string expr-str read)))
-    (swank-do-interactive write (lambda () (eval expr)))))
+  (swank-do-interactive
+   write
+   (lambda () (eval (with-input-from-string expr-str read)))))
 
 (define (swank:interactive-eval-region expr-str)
-  (let ((expr (cons 'begin (with-input-from-string expr-str read-all))))
-    (swank-do-interactive write (lambda () (eval expr)))))
+  (swank-do-interactive
+   write
+   (lambda () (eval (cons
+                     'begin
+                     (with-input-from-string expr-str read-all))))))
 
 (define (swank:pprint-eval expr-str)
-  (let ((expr (with-input-from-string expr-str read)))
-    (swank-do-interactive pretty-print (lambda () (eval expr)))))
+  (swank-do-interactive
+   pretty-print
+   (lambda () (eval (with-input-from-string expr-str read)))))
 
 (define (swank-do-interactive wr thunk)
   (let ((result (swank:do-with-result thunk)))
