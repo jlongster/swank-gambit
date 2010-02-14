@@ -263,6 +263,24 @@
    pretty-print
    (lambda () (eval (with-input-from-string expr-str read)))))
 
+(define (swank-current-continuation frame)
+  (list-ref (current-backtrace) frame))
+
+(define (swank:pprint-eval-string-in-frame expr-str frame)
+  (swank-do-interactive
+   pretty-print
+   (lambda ()
+     (let ((expr (with-input-from-string expr-str read)))
+       ;; Modelled after _repl.scm's eval-print
+       (##continuation-capture
+        (lambda (return)
+          (##eval-within
+           expr
+           (swank-current-continuation frame)
+           (macro-current-repl-context)
+           (lambda (results)
+             (##continuation-return return results)))))))))
+
 (define (swank-do-interactive wr thunk)
   (let ((result (swank:do-with-result thunk)))
     (cond
@@ -559,6 +577,7 @@
 (swank-define-op swank:completions)
 (swank-define-op swank:backtrace)
 (swank-define-op swank:simple-completions)
+(swank-define-op swank:pprint-eval-string-in-frame)
 
 ;(swank-define-op swank:connection-info)
 ;(swank-define-op swank:interactive-eval)
