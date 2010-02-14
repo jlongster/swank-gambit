@@ -492,6 +492,23 @@
    (get-continuation-environment (swank-current-continuation frame))
    '()))
 
+(define (swank:frame-source-location frame)
+  ;; Modelled after _repl.scm's display-locat
+  (let ((locat (##continuation-locat (swank-current-continuation frame))))
+    (if locat
+        (let* ((container (##locat-container locat))
+               (path (##container->path container))
+               (filepos (##position->filepos (##locat-position locat)))
+               (line (##fixnum.+ (##filepos-line filepos) 1))
+               (col (##fixnum.+ (##filepos-col filepos) 1)))
+          (if path
+              (list ':location
+                    (list ':file path)
+                    (list ':line line col)
+                    'nil) ; hints
+              'nil)) ; path not available
+        'nil))) ; location not available
+
 ;;;============================================================================
 
 ;;;; SLDB
@@ -673,6 +690,7 @@
 (swank-define-op swank:simple-completions)
 (swank-define-op swank:pprint-eval-string-in-frame)
 (swank-define-op swank:frame-locals-and-catch-tags)
+(swank-define-op swank:frame-source-location)
 
 ;(swank-define-op swank:connection-info)
 ;(swank-define-op swank:interactive-eval)
