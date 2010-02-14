@@ -335,12 +335,12 @@
          (thread-group->thread-vector
           (thread-thread-group (current-thread)))))
     (table-set! swank-threads (current-input-port) threads)
-    (cons '("a" "b" "c" "d") ;; don't know why this is needed...
+    (cons '(:id :name :status :specific)
           (map (lambda (t)
-                 (list "id"
-                       (object->string t)
-                       "status"
-                       "description"))
+                 (list (object->string (get-thread-id t))
+                       (object->string (thread-name t))
+                       (object->string (thread-state t))
+                       (object->string (thread-specific t))))
                (vector->list threads)))))
 
 (define (swank:debug-nth-thread n)
