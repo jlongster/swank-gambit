@@ -58,5 +58,19 @@
   ;; thrown is as informative as it gets.
   (serial-number->object id))
 
+(define (swank:inspect-presentation id reset-p)
+  (if reset-p
+      (reset-inspector))
+  (with-exception-catcher
+   (lambda (exc)
+     (if (unbound-serial-number-exception? exc)
+         (inspect-object '()) ;; FIXME
+         (raise exc)))
+   (lambda ()
+     (let ((what (serial-number->object id)))
+       (inspect-object what)))))
+
+(table-set! swank-op-table 'swank:inspect-presentation swank:inspect-presentation)
+
 (set! *send-repl-results-function* present-repl-results)
 (set! *preprocessing-eval* preprocessing-eval)

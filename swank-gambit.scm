@@ -285,20 +285,31 @@
 (define (swank-current-continuation frame)
   (list-ref (current-backtrace) frame))
 
+(define (eval-in-frame expr-str frame)
+  (let ((expr (with-input-from-string expr-str read)))
+    ;; Modelled after _repl.scm's eval-print
+    (##continuation-capture
+     (lambda (return)
+       (##eval-within
+        expr
+        (swank-current-continuation frame)
+        (macro-current-repl-context)
+        (lambda (results)
+          (##continuation-return return results)))))))
+
 (define (swank:pprint-eval-string-in-frame expr-str frame)
   (swank-do-interactive
    pretty-print
    (lambda ()
-     (let ((expr (with-input-from-string expr-str read)))
-       ;; Modelled after _repl.scm's eval-print
-       (##continuation-capture
-        (lambda (return)
-          (##eval-within
-           expr
-           (swank-current-continuation frame)
-           (macro-current-repl-context)
-           (lambda (results)
-             (##continuation-return return results)))))))))
+     (eval-in-frame expr-str frame))))
+
+(define (swank:inspect-in-frame expr-str frame)
+  (let ((result
+         (swank:do-with-result
+          (lambda ()
+            (eval-in-frame expr-str frame)))))
+    (reset-inspector)
+    (inspect-object result)))
 
 (define (swank-do-interactive wr thunk)
   (let ((result (swank:do-with-result thunk)))
@@ -768,6 +779,287 @@
 
 ;;;============================================================================
 
+;;;; Inspector
+
+;; Notes:
+;;
+;; - the plumbing is adapted from the MIT Scheme swank server that can
+;;   be found in SLIME's contrib/ directory.  Permission to adapt the
+;;   code kindly granted by Helmut Eller.
+;;
+;; - it would be better if this would use SRFI-40 for streaming like
+;;   swank-mit-scheme.scm does, however this would introduce a
+;;   dependency on Snow.  It would be nice to rewrite this code so
+;;   that it uses streams when available, lists otherwise.
+
+(define-structure inspector-state
+  object parts next previous content verbose)
+
+(define istate #f)
+
+(define (reset-inspector)
+  (set! istate #f))
+
+(define (swank:init-inspector string)
+  (reset-inspector)
+  (inspect-object (eval (with-input-from-string string read))))
+
+(define (>line o)
+  (with-output-to-string '() (lambda () (pretty-print o))))
+
+(define (iline label value) `(line ,label ,value))
+
+(define (inspect-object o)
+  (let ((previous istate)
+	(content (append (list
+                          (iline "Serial Number"
+                                 (object->serial-number o)))
+                         (inspect o)))
+	(parts (make-table)))
+    (set! istate (make-inspector-state
+                  o parts #f previous content
+                  (and previous (inspector-state-verbose previous))))
+    (if previous (inspector-state-next-set! previous istate))
+    (istate>elisp istate)))
+
+(define (inspect o)
+  (cond
+   ;; keyword?
+   ;; uninterned-symbol?
+   ;; uninterned-keyword?
+   ;; continuation?
+   ;; thread-group?
+   ;; foreign?
+   ;; socket-info?
+   ;; tty?
+   ;; fixnum?
+   ;; flonum?
+   ;; random-source?
+   ;; exception?
+   ;; will?
+   ;; thread?
+   ;; mutex?
+   ;; condition-variable?
+   ;; string?
+   ;; symbol?
+   ;; time?
+   ;; file-info?
+   ;; group-info?
+   ;; user-info?
+   ;; host-info?
+   ;; address-info?
+   ;; service-info?
+   ;; protocol-info?
+   ;; network-info?
+   ;; input-port?
+   ;; output-port?
+   ;; port?
+   ;; readtable?
+   ;; procedure?
+   ;; probably-scode?
+   ((s8vector? o) (inspect-s8vector o))
+   ((u8vector? o) (inspect-u8vector o))
+   ((s16vector? o) (inspect-s16vector o))
+   ((u16vector? o) (inspect-u16vector o))
+   ((s32vector? o) (inspect-s32vector o))
+   ((u32vector? o) (inspect-u32vector o))
+   ((s64vector? o) (inspect-s64vector o))
+   ((u64vector? o) (inspect-u64vector o))
+   ((f32vector? o) (inspect-f32vector o))
+   ((f64vector? o) (inspect-f64vector o))
+   ((table? o) (inspect-table o))
+   ((box? o) (inspect-box o))
+   (else (list (iline "Contents" o)))))
+
+(define (inspect-s8vector o)
+  (reverse
+   (let loop ((i 0) (result '()))
+     (if (< i (s8vector-length o))
+         (loop (+ i 1) (cons (iline i (s8vector-ref o i)) result))
+         result))))
+
+(define (inspect-u8vector o)
+  (reverse
+   (let loop ((i 0) (result '()))
+     (if (< i (u8vector-length o))
+         (loop (+ i 1) (cons (iline i (u8vector-ref o i)) result))
+         result))))
+
+(define (inspect-s16vector o)
+  (reverse
+   (let loop ((i 0) (result '()))
+     (if (< i (s16vector-length o))
+         (loop (+ i 1) (cons (iline i (s16vector-ref o i)) result))
+         result))))
+
+(define (inspect-u16vector o)
+  (reverse
+   (let loop ((i 0) (result '()))
+     (if (< i (u16vector-length o))
+         (loop (+ i 1) (cons (iline i (u16vector-ref o i)) result))
+         result))))
+
+(define (inspect-s32vector o)
+  (reverse
+   (let loop ((i 0) (result '()))
+     (if (< i (s32vector-length o))
+         (loop (+ i 1) (cons (iline i (s32vector-ref o i)) result))
+         result))))
+
+(define (inspect-u32vector o)
+  (reverse
+   (let loop ((i 0) (result '()))
+     (if (< i (u32vector-length o))
+         (loop (+ i 1) (cons (iline i (u32vector-ref o i)) result))
+         result))))
+
+(define (inspect-s64vector o)
+  (reverse
+   (let loop ((i 0) (result '()))
+     (if (< i (s64vector-length o))
+         (loop (+ i 1) (cons (iline i (s64vector-ref o i)) result))
+         result))))
+
+(define (inspect-u64vector o)
+  (reverse
+   (let loop ((i 0) (result '()))
+     (if (< i (u64vector-length o))
+         (loop (+ i 1) (cons (iline i (u64vector-ref o i)) result))
+         result))))
+
+(define (inspect-f32vector o)
+  (reverse
+   (let loop ((i 0) (result '()))
+     (if (< i (f32vector-length o))
+         (loop (+ i 1) (cons (iline i (f32vector-ref o i)) result))
+         result))))
+
+(define (inspect-f64vector o)
+  (reverse
+   (let loop ((i 0) (result '()))
+     (if (< i (f64vector-length o))
+         (loop (+ i 1) (cons (iline i (f64vector-ref o i)) result))
+         result))))
+
+(define (inspect-table o)
+  (let ((result '()))
+    (table-for-each
+     (lambda (key value)
+       (set! result
+             (cons (iline "Key" key)
+                   (cons (iline "Value" value)
+                         result))))
+     o)
+    (reverse result)))
+
+(define (inspect-box o)
+  (list (iline "Contents" (unbox o))))
+
+(define (swank:inspect-nth-part index)
+  (inspect-object (swank:inspector-nth-part index)))
+
+(define (istate>elisp istate)
+  (list ':title (>line (inspector-state-object istate))
+	':id (assign-index (inspector-state-object istate)
+                           (inspector-state-parts istate))
+	':content (prepare-range (inspector-state-parts istate)
+				 (inspector-state-content istate)
+				 0 500)))
+
+(define (assign-index o parts)
+  (let ((i (table-length parts)))
+    (table-set! parts i o)
+    i))
+
+(define (substream s from to)
+  (let loop ((i 0) (l '()) (s s))
+    (cond ((or (= i to) (null? s)) (reverse l))
+	  ((< i from) (loop (1+ i) l (cdr s)))
+	  (else (loop (+ 1 i) (cons (car s) l) (cdr s))))))
+
+(define (prepare-range parts content from to)
+  (let* ((cs (substream content from to))
+	 (ps (prepare-parts cs parts)))
+    (list ps
+	  (if (< (length cs) (- to from))
+	      (+ from (length cs))
+	      (+ to 1000))
+	  from to)))
+
+(define (prepare-parts ps parts)
+  (define (line label value)
+    `(,(append-strings (list (object->string label) ": "))
+      (:value ,(>line value) ,(assign-index value parts))
+      "\n"))
+  (apply append (map (lambda (p)
+                       (cond ((string? p) (list p))
+                             ((symbol? p) (list (symbol->string p)))
+                             (#t
+                              (case (car p)
+                                ((line) (apply line (cdr p)))
+                                (else (error "Invalid part:" p))))))
+                     ps)))
+
+(define (swank:quit-inspector)
+  (reset-inspector)
+  'nil)
+
+(define (swank:inspector-pop)
+  (cond ((inspector-state-previous istate)
+	 (set! istate (inspector-state-previous istate))
+	 (istate>elisp istate))
+	(else 'nil)))
+
+(define (swank:inspector-next)
+  (cond ((inspector-state-next istate)
+	 (set! istate (inspector-state-next istate))
+	 (istate>elisp istate))
+	(else 'nil)))
+
+(define (swank:inspector-range from to)
+  (prepare-range (inspector-state-parts istate)
+		 (inspector-state-content istate)
+		 from to))
+
+(define (swank:inspector-toggle-verbose)
+  (inspector-state-verbose-set! istate (not (inspector-state-verbose istate)))
+  (istate>elisp istate))
+
+(define (swank:describe-inspectee)
+  "dummy")
+
+(define (swank:inspector-reinspect)
+  (istate>elisp istate))
+
+(define (swank:pprint-inspector-part index)
+  (with-output-to-string
+    '()
+    (lambda ()
+      (pretty-print (swank:inspector-nth-part index)))))
+
+(define (swank:inspector-nth-part index)
+  (table-ref (inspector-state-parts istate) index 'no-such-part))
+
+(define (swank:find-source-location-for-emacs spec)
+  (find-source-location (value-spec-ref spec)))
+
+(define (find-source-location obj)
+  '(:error "Not implemented: find-source-location"))
+
+(define (value-spec-ref spec)
+  (cond
+   ((eq? ':string (car spec))
+    (eval (read-from-string (nth spec 1))))
+   ((eq? ':inspector (car spec))
+    (inspector-nth-part (nth spec 1)))
+   ((eq? ':sldb (car spec))
+    (frame-var-value (nth spec 1) (nth spec 2)))))
+
+(define (frame-var-value frame var)
+  'nil)
+
+;;;============================================================================
+
 (define-macro (swank-define-op proc-name)
   `(table-set! swank-op-table ',proc-name ,proc-name))
 
@@ -797,6 +1089,17 @@
 (swank-define-op swank:sldb-return-from-frame)
 (swank-define-op swank:sldb-disassemble)
 (swank-define-op swank:quit-thread-browser)
+(swank-define-op swank:init-inspector)
+(swank-define-op swank:quit-inspector)
+(swank-define-op swank:inspect-nth-part)
+(swank-define-op swank:inspector-pop)
+(swank-define-op swank:inspector-next)
+(swank-define-op swank:inspect-in-frame)
+(swank-define-op swank:inspector-toggle-verbose)
+(swank-define-op swank:describe-inspectee)
+(swank-define-op swank:inspector-reinspect)
+(swank-define-op swank:pprint-inspector-part)
+(swank-define-op swank:find-source-location-for-emacs)
 
 ;(swank-define-op swank:connection-info)
 ;(swank-define-op swank:interactive-eval)
@@ -846,11 +1149,6 @@
 ;swank:simple-completions
 ;swank:apropos-list-for-emacs
 ;swank:list-all-package-names
-;swank:init-inspector
-;swank:inspect-nth-part
-;swank:quit-inspector
-;swank:inspector-pop
-;swank:inspector-next
 ;swank:inspector-range
 
 ;;;============================================================================
