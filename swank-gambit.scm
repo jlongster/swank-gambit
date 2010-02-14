@@ -130,22 +130,26 @@
              (if (= 4 (length args))
                  (apply
                   (lambda (msg package-name thread-id seqnum)
+                    (current-seqnum seqnum)
                     (if (pair? msg)
                         (let ((args (cdr msg)))
                           (let ((op (table-ref swank-op-table (car msg) #f)))
                             (if op
-                                (let ((result (apply op args)))
-                                  (cond
-                                   ((eq? result 'abort)
-                                    (swank-write
-                                     (list ':return
-                                           '(:abort)
-                                           seqnum)))
-                                   (result
-                                    (swank-write
-                                     (list ':return
-                                           (list ':ok result)
-                                           seqnum)))))
+                                (with-exception-catcher
+                                 (lambda (exc)
+                                   (if (swank-abort? exc)
+                                       (swank-write
+                                        (list ':return
+                                              '(:abort)
+                                              seqnum))
+                                       (raise exc)))
+                                 (lambda ()
+                                   (let ((result (apply op args)))
+                                   (if result
+                                       (swank-write
+                                        (list ':return
+                                              (list ':ok result)
+                                              seqnum))))))
                                 (begin
                                   (debug (list '***unhandled*** req))
                                   (swank-write
@@ -233,7 +237,7 @@
   (let* ((expr (with-input-from-string expr-str read))
          (result (swank:do-with-result (lambda () (eval expr)))))
     (cond
-     ((exception-result? result) 'abort)
+     ((exception-result? result) #f)
      ((eq? result '#!void) 'nil)
      (else
       (let ((result-str (object->string result)))
@@ -256,7 +260,7 @@
 (define (swank-do-interactive thunk wr)
   (let ((result (swank:do-with-result thunk)))
     (cond
-     ((exception-result? result) 'abort)
+     ((exception-result? result) #f)
      ((eq? result '#!void) "")
      (else 
       (with-output-to-string "" (lambda () (wr result)))))))
@@ -418,6 +422,8 @@
               i
               (loop (+ i 1)))))))
 
+(define-type swank-abort)
+
 (define-type exception-result
   exc
   cont)
@@ -430,19 +436,21 @@
 ;;; Only do this for exceptions that occur from the eval'ed
 ;;; expression, not any exceptions thrown by swank-gambit code.
 (define (do-with-sldb-handler thunk)
-  (let ((result
-         
-         ;; Capture the outer continuation so that we can exit from
-         ;; the context of where the exception happens.
-         (call/cc
-          (lambda (outer-cont)
-            (with-exception-handler
-             (lambda (exc)
-               (##continuation-capture
-                (lambda (cont)
-                  (outer-cont (make-exception-result exc cont)))))
-             thunk)))))
-    result))
+  ;; Capture the top-level continuation so that we can break out of
+  ;; the debugger without subsequent errors being raised.
+  (##continuation-capture
+   (lambda (toplevel-cont)
+     (current-toplevel-cont toplevel-cont)
+     ;; Capture the outer continuation so that we can exit from
+     ;; the context of where the exception happens.
+     (call/cc
+      (lambda (outer-cont)
+        (with-exception-handler
+         (lambda (exc)
+           (##continuation-capture
+            (lambda (cont)
+              (outer-cont (make-exception-result exc cont)))))
+         thunk))))))
 
 (define (swank:invoke-debugger exc cont)
   (let ((thread-id (get-thread-id (current-thread)))
@@ -468,7 +476,13 @@
 (define (swank:invoke-nth-restart-for-emacs level restart)
   (swank-write
    `(:debug-return ,(get-thread-id (current-thread)) 1 nil))
-  'exited)
+  ;; ##continuation-return means emacs-rex won't get a chance to send
+  ;; a reply for this seqnum, so send it now.  Sending :abort because
+  ;; otherwise SLIME prints spam in the echo area.
+  (swank-write
+   (list ':return '(:abort) (current-seqnum)))
+  (##continuation-graft (current-toplevel-cont)
+                        (lambda () (raise (make-swank-abort)))))
 
 (define (swank:make-frames frames)
   (let loop ((acc '())
@@ -499,6 +513,8 @@
     (:restartable nil)))
 
 (define current-backtrace (make-parameter #f))
+(define current-toplevel-cont (make-parameter #f))
+(define current-seqnum (make-parameter #f))
 
 (define (swank:backtrace start stop)
   (let ((backtrace (current-backtrace)))
