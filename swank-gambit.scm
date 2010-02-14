@@ -367,6 +367,10 @@
   (set! swank-threads (make-table test: eq? weak-keys: #t))
   'nil)
 
+(define (swank:quit-thread-browser)
+  (set! swank-threads (make-table test: eq? weak-keys: #t))
+  'nil)
+
 (define (swank:debug-nth-thread n)
   (let ((t (swank-get-nth-thread n))
         (cont-mutex (make-mutex 'swank-get-thread-capture))
