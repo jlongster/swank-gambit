@@ -343,6 +343,10 @@
                        (object->string (thread-specific t))))
                (vector->list threads)))))
 
+(define (swank:quit-thread-browser)
+  (set! swank-threads (make-table test: eq? weak-keys: #t))
+  'nil)
+
 (define (swank:debug-nth-thread n)
   (let ((t (swank-get-nth-thread n)))
     (if t (thread-interrupt! t)) ;; not quite sufficient...
@@ -732,6 +736,7 @@
 (swank-define-op swank:frame-source-location)
 (swank-define-op swank:sldb-return-from-frame)
 (swank-define-op swank:sldb-disassemble)
+(swank-define-op swank:quit-thread-browser)
 
 ;(swank-define-op swank:connection-info)
 ;(swank-define-op swank:interactive-eval)
