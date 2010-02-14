@@ -257,7 +257,7 @@
   (let ((expr (with-input-from-string expr-str read)))
     (swank-do-interactive pretty-print (lambda () (eval expr)))))
 
-(define (swank-do-interactive thunk wr)
+(define (swank-do-interactive wr thunk)
   (let ((result (swank:do-with-result thunk)))
     (cond
      ((exception-result? result) #f)
