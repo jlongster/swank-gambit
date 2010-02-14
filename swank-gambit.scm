@@ -176,6 +176,8 @@
 
 ;;;============================================================================
 
+(define swank-modules '())
+
 (define (swank:connection-info)
 
   #;
@@ -190,28 +192,25 @@
     :lisp-implementation (:name "gambit" :type "Gambit" :version ,(system-version-string))
     :machine (:instance ,(host-name) :type ,(system-type-string))
     :features ()
-    :modules ()
+    :modules swank-modules
     :package (:name "#package-name#" :prompt "")
     :version ,swank-wire-protocol-version))
 
 (define (swank:swank-require modules)
 
-  '(
-    "SWANK-PRESENTATIONS"
-    "SWANK-ARGLISTS"
-    "SWANK-FANCY-INSPECTOR"
-    "SWANK-FUZZY"
-    "SWANK-C-P-C"
-    "SWANK-PACKAGE-FU"
-    "SB-CLTL2"
-    "SB-POSIX"
-    "SB-INTROSPECT"
-    "SB-BSD-SOCKETS"
-    "SB-GROVEL"
-    "ASDF"
-    )
+  (let loop ([modules (if (list? modules) modules (list modules))])
+    (if (car modules)
+        (if (not (member (car modules) swank-modules))
+            (let ((colon-filename (object->string (car modules))))
+              (load (append-strings
+                     (list (substring
+                            colon-filename
+                            1
+                            (string-length colon-filename))
+                           ".scm")))))
+        (loop (cdr modules))))
 
-  '())
+  swank-modules)
 
 (define (swank:create-repl arg)
   ;; fake it
@@ -233,35 +232,53 @@
           (debug-exception-result result))
       result)))
 
+(define (send-repl-results values)
+  (define (f value)
+    (let ((result-str (object->string value)))
+      (swank-write `(:write-string ,result-str :repl-result))
+      (swank-write `(:write-string "\n" :repl-result))))
+
+  (apply f values))
+
+;; Hook for serializing results for use by presentations
+;; Overridden by swank-gambit-presentations.scm
+(define *send-repl-results-function* send-repl-results)
+
+;; Hook for workaround for lack of #. syntax in scheme
+;; Overridden by swank-gambit-presentations.scm
+(define *preprocessing-eval* (lambda (expr) (eval expr)))
+
 (define (swank:listener-eval expr-str)
   (let ((result
          (swank:do-with-result
-          (lambda () (eval (with-input-from-string expr-str read))))))
+          (lambda () (*preprocessing-eval*
+                      (with-input-from-string expr-str read))))))
     (cond
      ((exception-result? result) #f)
      ((eq? result '#!void) 'nil)
      (else
-      (let ((result-str (object->string result)))
-        (swank-write `(:write-string ,result-str :repl-result))
-        (swank-write `(:write-string "\n" :repl-result))
-        'nil)))))
+      (*send-repl-results-function* (list result))
+      'nil))))
 
 (define (swank:interactive-eval expr-str)
   (swank-do-interactive
    write
-   (lambda () (eval (with-input-from-string expr-str read)))))
+   (lambda () (*preprocessing-eval*
+               (with-input-from-string expr-str read)))))
 
 (define (swank:interactive-eval-region expr-str)
   (swank-do-interactive
    write
-   (lambda () (eval (cons
-                     'begin
-                     (with-input-from-string expr-str read-all))))))
+   (lambda () (*preprocessing-eval*
+               (cons
+                'begin
+                (with-input-from-string expr-str read-all))))))
 
 (define (swank:pprint-eval expr-str)
   (swank-do-interactive
    pretty-print
-   (lambda () (eval (with-input-from-string expr-str read)))))
+   (lambda () (*preprocessing-eval*
+               (with-input-from-string expr-str read)))))
 
 (define (swank-current-continuation frame)
   (list-ref (current-backtrace) frame))
@@ -657,7 +674,8 @@
    (list ':return '(:abort) (current-seqnum)))
   (let ((result
          (swank:do-with-result
-          (lambda () (eval (with-input-from-string expr-str read))))))
+          (lambda () (*preprocessing-eval*
+                      (with-input-from-string expr-str read))))))
     (##continuation-return
      (swank-current-continuation frame)
      result)))
