@@ -398,6 +398,100 @@
       ""
       (f (car strings) (cdr strings))))
 
+(define (swank:frame-locals-and-catch-tags frame)
+
+  (define (get-continuation-environment cont)
+
+    (define (get-var-val var val-or-box cte)
+      ;; Modelled after _repl.scm's ##display-var-val
+      (cond ((##var-i? var)
+             (get-var-val-aux (##var-i-name var)
+                              val-or-box
+                              cte))
+            ((##var-c-boxed? var)
+             (get-var-val-aux (##var-c-name var)
+                              (##unbox val-or-box)
+                              cte))
+            (else
+             (get-var-val-aux (##var-c-name var)
+                              val-or-box
+                              cte))))
+
+    (define (get-var-val-aux var val cte)
+      ;; Modelled after _repl.scm's ##display-var-val-aux
+      (list
+       ':name (##object->string var)
+       ':value (##object->string
+                (if (##cte-top? cte)
+                    (##inverse-eval-in-env val
+                                           cte)
+                    (##inverse-eval-in-env val
+                                           (##cte-parent-cte cte))))
+       ':id 0))
+
+    (define (get-vars lst cte)
+      ;; Modelled after _repl.scm's ##display-vars
+      (let loop ((lst lst) (result '()))
+        (if (##pair? lst)
+            (let* ((loc (##car lst))
+                   (var (##car loc))
+                   (val (##cdr loc)))
+              (loop (##cdr lst)
+                    (cons result (get-var-val var val cte))))
+            result)))
+
+    (define (get-parameters lst cte)
+      ;; Modelled after _repl.scm's ##display-parameters
+      (let loop ((lst lst) (result '()))
+        (if (##pair? lst)
+            (let* ((param-val (##car lst))
+                   (param (##car param-val))
+                   (val (##cdr param-val)))
+              (if (##not (##hidden-parameter? param))
+                  (let ((x (##inverse-eval-in-env param cte)))
+                    (loop (##cdr lst)
+                          (cons result (get-var-val-aux (##list x) val cte))))
+                  (loop (##cdr lst) result)))
+            result)))
+
+    (define (get-rte cte rte)
+      ;; Modelled after _repl.scm's ##display-rte
+      (let loop1 ((c cte)
+                  (r rte)
+                  (result '()))
+        (cond ((##cte-top? c) result)
+              ((##cte-frame? c)
+               (let loop2 ((vars (##cte-frame-vars c))
+                           (vals (##cdr (##vector->list r)))
+                           (result result))
+                 (if (##pair? vars)
+                     (let ((var (##car vars)))
+                       (loop2 (##cdr vars)
+                              (##cdr vals)
+                              (if (##not (##hidden-local-var? var))
+                                  (let ((val-or-box (##car vals)))
+                                    (cons (get-var-val var val-or-box c) result))
+                                  result)))
+                     (loop1 (##cte-parent-cte c)
+                            (macro-rte-up r)
+                            result))))
+              (else
+               (loop1 (##cte-parent-cte c)
+                      r
+                      result)))))
+
+    ;; Modelled after _repl.scm's ##display-environment
+    (if (##interp-continuation? cont)
+        (let (($code (##interp-continuation-code cont))
+              (rte (##interp-continuation-rte cont)))
+          (get-rte (macro-code-cte $code) rte))
+        (get-vars (##continuation-locals cont)
+                  ##interaction-cte)))
+
+  (list
+   (get-continuation-environment (swank-current-continuation frame))
+   '()))
+
 ;;;============================================================================
 
 ;;;; SLDB
@@ -578,6 +672,7 @@
 (swank-define-op swank:backtrace)
 (swank-define-op swank:simple-completions)
 (swank-define-op swank:pprint-eval-string-in-frame)
+(swank-define-op swank:frame-locals-and-catch-tags)
 
 ;(swank-define-op swank:connection-info)
 ;(swank-define-op swank:interactive-eval)
@@ -623,7 +718,6 @@
 ;swank:invoke-nth-restart-for-emacs
 ;swank:debugger-info-for-emacs
 ;swank:backtrace
-;swank:frame-locals-and-catch-tags
 ;swank:inspect-frame-var
 ;swank:simple-completions
 ;swank:apropos-list-for-emacs
