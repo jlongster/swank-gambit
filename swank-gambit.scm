@@ -368,9 +368,44 @@
   'nil)
 
 (define (swank:debug-nth-thread n)
-  (let ((t (swank-get-nth-thread n)))
-    (if t (thread-interrupt! t)) ;; not quite sufficient...
-    'nil))
+  (let ((t (swank-get-nth-thread n))
+        (cont-mutex (make-mutex 'swank-get-thread-capture))
+        (wakeup-mutex (make-mutex 'swank-wake-thread)))
+    (if t
+        (begin
+          (mutex-lock! cont-mutex #f t)
+          (mutex-lock! wakeup-mutex #f)
+          (##thread-interrupt!
+           t
+           (lambda ()
+             (mutex-specific-set! cont-mutex (##continuation-capture (lambda (k) k)))
+             (mutex-unlock! cont-mutex)
+             (mutex-lock! wakeup-mutex)
+             '#!void))
+          (mutex-lock! cont-mutex #f (current-thread))
+          (let* ((cont (mutex-specific cont-mutex))
+                 (backtrace (cdr (continuation-interesting-frames cont))))
+            (current-backtrace backtrace)
+            (current-toplevel-cont cont)
+            (current-restarts '(CONTINUE))
+            (current-debug-thread t)
+            (current-wakeup-mutex wakeup-mutex)
+            (swank-write
+             `(:debug ,(get-thread-id t)
+                      1
+                      (,(append-strings (list "Thread "
+                                              (object->string t)
+                                              " interrupt")) "  [N/A]" nil)
+                      (("CONTINUE" "Continue thread execution."))
+                      ,(let ((backtrace (if (>= (length backtrace) 10)
+                                            (take backtrace 10)
+                                            backtrace)))
+                         (swank:make-frames backtrace))
+                      ())))
+          (swank-write
+           `(:debug-activate ,(get-thread-id t) 1 true))
+          (##thread-yield!))))
+  'nil)
 
 (define (swank:kill-nth-thread n)
   (let ((t (swank-get-nth-thread n)))
@@ -632,7 +667,8 @@
   (let ((thread-id (get-thread-id (current-thread)))
         (backtrace (continuation-interesting-frames cont)))
     (current-backtrace backtrace)
-    (swank-write
+    (current-restarts '(ABORT))
+    (current-debug-thread (current-thread))    (swank-write
      `(:debug ,thread-id
               1
               (,(exception-message exc)
@@ -650,15 +686,25 @@
      `(:debug-activate ,thread-id 1 true))))
 
 (define (swank:invoke-nth-restart-for-emacs level restart)
+  ;; FIXME: this currently assumes that ABORT is sent for the current
+  ;; thread and CONTINUE is sent for a suspended thread
+
   (swank-write
-   `(:debug-return ,(get-thread-id (current-thread)) 1 nil))
+   `(:debug-return ,(get-thread-id (current-debug-thread)) 1 nil))
   ;; ##continuation-return means emacs-rex won't get a chance to send
   ;; a reply for this seqnum, so send it now.  Sending :abort because
   ;; otherwise SLIME prints spam in the echo area.
-  (swank-write
-   (list ':return '(:abort) (current-seqnum)))
-  (##continuation-graft (current-toplevel-cont)
-                        (lambda () (raise (make-swank-abort)))))
+  (let ((restart (list-ref (current-restarts) restart)))
+    (cond
+     ((eq? restart 'ABORT)
+      (swank-write
+       (list ':return '(:abort) (current-seqnum)))
+      (##continuation-graft (current-toplevel-cont)
+                            (lambda () (raise (make-swank-abort)))))
+     ((eq? restart 'CONTINUE)
+      (mutex-specific-set! (current-wakeup-mutex) '(CONTINUE))
+      (mutex-unlock! (current-wakeup-mutex))
+      'nil))))
 
 (define (swank:make-frames frames)
   (let loop ((acc '())
@@ -713,6 +759,9 @@
 (define current-backtrace (make-parameter #f))
 (define current-toplevel-cont (make-parameter #f))
 (define current-seqnum (make-parameter #f))
+(define current-restarts (make-parameter #f))
+(define current-debug-thread (make-parameter #f))
+(define current-wakeup-mutex (make-parameter #f))
 
 (define (swank:backtrace start stop)
   (let ((backtrace (current-backtrace)))
