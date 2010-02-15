@@ -1101,55 +1101,29 @@
 (swank-define-op swank:pprint-inspector-part)
 (swank-define-op swank:find-source-location-for-emacs)
 
-;(swank-define-op swank:connection-info)
-;(swank-define-op swank:interactive-eval)
-;(swank-define-op swank:interactive-eval-region)
-;(swank-define-op swank:listener-eval)
-;(swank-define-op swank:pprint-eval)
+;; Not yet implemented
+;;
+;; (this list is incomplete)
+
+;(swank-define-op swank:apropos-list-for-emacs)
+;(swank-define-op swank:buffer-first-change)
 ;(swank-define-op swank:compile-file-for-emacs)
 ;(swank-define-op swank:compile-string-for-emacs)
-;(swank-define-op swank:load-file)
-;(swank-define-op swank:simple-completions)
-;(swank-define-op swank:quit-lisp)
-;(swank-define-op swank:operator-arglist)
-;(swank-define-op swank:buffer-first-change)
-;(swank-define-op swank:swank-require)
-;(swank-define-op swank:find-definitions-for-emacs)
+;(swank-define-op swank:debugger-info-for-emacs)
 ;(swank-define-op swank:disassemble-symbol)
-;(swank-define-op swank:swank-macroexpand-1)
+;(swank-define-op swank:filename-to-modulename)
+;(swank-define-op swank:find-definitions-for-emacs)
+;(swank-define-op swank:inspect-frame-var)
+;(swank-define-op swank:list-all-package-names)
+;(swank-define-op swank:operator-arglist)
+;(swank-define-op swank:set-package)
+;(swank-define-op swank:sldb-abort)
+;(swank-define-op swank:sldb-continue)
 ;(swank-define-op swank:swank-macroexpand)
+;(swank-define-op swank:swank-macroexpand-1)
 ;(swank-define-op swank:swank-macroexpand-all)
-;
-;swank:connection-info
-;swank:quit-lisp
-;swank:listener-eval
-;swank:interactive-eval
-;swank:pprint-eval
-;swank:interactive-eval-region
-;swank:set-package
-;swank:compile-string-for-emacs
-;swank:compiler-notes-for-emacs
-;swank:compile-file-for-emacs
-;swank:load-file
-;swank:disassemble-symbol
-;swank:swank-macroexpand-all
-;swank:swank-macroexpand-1
-;swank:swank-macroexpand
-;swank:operator-arglist
-;swank:buffer-first-change
-;swank:filename-to-modulename
-;swank:find-definitions-for-emacs
-;swank:throw-to-toplevel
-;swank:sldb-abort
-;swank:sldb-continue
-;swank:invoke-nth-restart-for-emacs
-;swank:debugger-info-for-emacs
-;swank:backtrace
-;swank:inspect-frame-var
-;swank:simple-completions
-;swank:apropos-list-for-emacs
-;swank:list-all-package-names
-;swank:inspector-range
+;(swank-define-op swank:swank-require)
+;(swank-define-op swank:throw-to-toplevel)
 
 ;;;============================================================================
 
