@@ -58,10 +58,12 @@
 
 (define swank-server-address ":4005")
 
+(define swank-server-thread-group (make-thread-group "swank-tcp-handlers"))
+
 (define (swank-server-register! #!key (server-address swank-server-address))
   (tcp-service-register! server-address
                          swank-server-handle
-                         (thread-thread-group (current-thread))))
+                         swank-server-thread-group))
 
 (define (swank-server-unregister! #!key (server-address swank-server-address))
   (tcp-service-unregister! server-address))
@@ -327,21 +329,39 @@
 (define (swank-get-nth-thread n)
   (let ((threads (table-ref swank-threads (current-input-port) #f)))
     (and threads
-         (< n (vector-length threads))
-         (vector-ref threads n))))
+         (< n (length threads))
+         (list-ref threads n))))
 
 (define (swank:list-threads)
-  (let ((threads
-         (thread-group->thread-vector
-          (thread-thread-group (current-thread)))))
+
+  (define (all-threads exclude-thread-groups)
+    (define (recurse thread-group threads)
+      (let loop ((children (thread-group->thread-group-list
+                            thread-group))
+                 (threads (append
+                           threads
+                           (if (memq thread-group
+                                     exclude-thread-groups)
+                               '()
+                               (thread-group->thread-list
+                                thread-group)))))
+        (if (pair? children)
+            (loop (cdr children) (recurse (car children) threads))
+            threads)))
+
+    (##declare (not interrupts-enabled))
+    (recurse (thread-thread-group (macro-primordial-thread)) '()))
+
+  (let ((threads (all-threads (list swank-server-thread-group))))
     (table-set! swank-threads (current-input-port) threads)
-    (cons '(:id :name :status :specific)
+    (cons '(:id :name :status)
           (map (lambda (t)
                  (list (object->string (get-thread-id t))
                        (object->string (thread-name t))
-                       (object->string (thread-state t))
-                       (object->string (thread-specific t))))
-               (vector->list threads)))))
+                       (object->string (list (thread-state t)
+                                             (thread-thread-group t)
+                                             (thread-specific t)))))
+               threads))))
 
 (define (swank:quit-thread-browser)
   (set! swank-threads (make-table test: eq? weak-keys: #t))
