@@ -356,7 +356,7 @@
     (table-set! swank-threads (current-input-port) threads)
     (cons '(:id :name :status)
           (map (lambda (t)
-                 (list (object->string (get-thread-id t))
+                 (list (object->string (object->serial-number t))
                        (object->string (thread-name t))
                        (object->string (list (thread-state t)
                                              (thread-thread-group t)
@@ -391,7 +391,7 @@
             (current-debug-thread t)
             (current-wakeup-mutex wakeup-mutex)
             (swank-write
-             `(:debug ,(get-thread-id t)
+             `(:debug ,(object->serial-number t)
                       1
                       (,(append-strings (list "Thread "
                                               (object->string t)
@@ -403,7 +403,7 @@
                          (swank:make-frames backtrace))
                       ())))
           (swank-write
-           `(:debug-activate ,(get-thread-id t) 1 true))
+           `(:debug-activate ,(object->serial-number t) 1 true))
           (##thread-yield!))))
   'nil)
 
@@ -620,19 +620,6 @@
             #f
             call))))
 
-;; Is this is the right way to do this?
-(define (get-thread-id thread)
-  (let* ((threads
-          (thread-group->thread-vector
-           (thread-thread-group (current-thread))))
-         (len (vector-length threads)))
-    (let loop ((i 0))
-      (if (>= i len)
-          #f
-          (if (eq? (vector-ref threads i) thread)
-              i
-              (loop (+ i 1)))))))
-
 (define-type swank-abort)
 
 (define-type exception-result
@@ -664,7 +651,7 @@
          thunk))))))
 
 (define (swank:invoke-debugger exc cont)
-  (let ((thread-id (get-thread-id (current-thread)))
+  (let ((thread-id (object->serial-number (current-thread)))
         (backtrace (continuation-interesting-frames cont)))
     (current-backtrace backtrace)
     (current-restarts '(ABORT))
@@ -690,7 +677,7 @@
   ;; thread and CONTINUE is sent for a suspended thread
 
   (swank-write
-   `(:debug-return ,(get-thread-id (current-debug-thread)) 1 nil))
+   `(:debug-return ,(object->serial-number (current-debug-thread)) 1 nil))
   ;; ##continuation-return means emacs-rex won't get a chance to send
   ;; a reply for this seqnum, so send it now.  Sending :abort because
   ;; otherwise SLIME prints spam in the echo area.
@@ -736,7 +723,7 @@
 
 (define (swank:sldb-return-from-frame frame expr-str)
   (swank-write
-   `(:debug-return ,(get-thread-id (current-thread)) 1 nil))
+   `(:debug-return ,(object->serial-number (current-thread)) 1 nil))
   ;; ##continuation-return means emacs-rex won't get a chance to send
   ;; a reply for this seqnum, so send it now.  Sending :abort because
   ;; otherwise SLIME prints spam in the echo area.
