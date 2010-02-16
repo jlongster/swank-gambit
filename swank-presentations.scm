@@ -2,7 +2,11 @@
 
 ;;; File: "swank-presentations.scm"
 
-;;; Copyright (c) 2009 by Julian Scheid, All Rights Reserved.
+;;; Copyright (c) 2010 by Julian Scheid, All Rights Reserved.
+
+;;; This software is released under a dual LGPL and Apache 2 license.
+;;; These licenses are included with this software in LGPL.txt and
+;;; LICENSE-2.0.txt.
 
 ;;;============================================================================
 
