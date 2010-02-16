@@ -2,7 +2,11 @@
 
 ;;; File: "swank-gambit.scm", Time-stamp: <2009-08-29 10:25:51 feeley>
 
-;;; Copyright (c) 2009 by Marc Feeley, All Rights Reserved.
+;;; Copyright (c) 2009-2010 by Marc Feeley and James Long, All Rights Reserved.
+
+;;; This software is released under a dual LGPL and Apache 2 license.
+;;; These licenses are included with this software in LGPL.txt and
+;;; LICENSE-2.0.txt.
 
 ;;;============================================================================
 
