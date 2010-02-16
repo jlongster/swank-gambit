@@ -1,7 +1,5 @@
 ;;;============================================================================
 
-;;; File: "swank-gambit.scm", Time-stamp: <2010-02-15 19:08:52 james>
-
 ;;; Copyright (c) 2009-2010 by Marc Feeley, James Long, and Julian
 ;;; Scheid.  All Rights Reserved.
 
