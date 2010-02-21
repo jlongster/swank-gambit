@@ -181,6 +181,8 @@
 
 (define swank-modules '())
 
+(define swank-supported-modules '(:swank-presentations))
+
 (define (swank:connection-info)
 
   #;
@@ -195,7 +197,7 @@
     :lisp-implementation (:name "gambit" :type "Gambit" :version ,(system-version-string))
     :machine (:instance ,(host-name) :type ,(system-type-string))
     :features ()
-    :modules swank-modules
+    :modules ,swank-modules
     :package (:name "#package-name#" :prompt "")
     :version ,swank-wire-protocol-version))
 
@@ -203,7 +205,8 @@
 
   (let loop ([modules (if (list? modules) modules (list modules))])
     (if (car modules)
-        (if (not (member (car modules) swank-modules))
+        (if (and (not (member (car modules) swank-modules))
+                 (member (car modules) swank-supported-modules))
             (let ((colon-filename (object->string (car modules))))
               (load (append-strings
                      (list (substring
