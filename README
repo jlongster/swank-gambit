@@ -7,3 +7,6 @@ Make sure to setup SLIME in Emacs:
 (slime-setup '(slime-repl))
 
 Run swank-gambit.scm from the command line, and then type `M-x slime-connect ENT ENT ENT` to get a SLIME prompt.
+
+You will need Sort.scm from
+http://dynamo.iro.umontreal.ca/~gambit/wiki/images/3/34/Sort-r1.tgz
