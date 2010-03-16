@@ -596,8 +596,8 @@
                     (list ':file path)
                     (list ':line line col)
                     'nil) ; hints
-              'nil)) ; path not available
-        'nil))) ; location not available
+              '(:error "Path not available"))) ; path not available
+        '(:error "Locat not available")))) ; location not available
 
 ;;;============================================================================
 
@@ -973,7 +973,7 @@
 (define (substream s from to)
   (let loop ((i 0) (l '()) (s s))
     (cond ((or (= i to) (null? s)) (reverse l))
-	  ((< i from) (loop (1+ i) l (cdr s)))
+	  ((< i from) (loop (+ 1 i) l (cdr s)))
 	  (else (loop (+ 1 i) (cons (car s) l) (cdr s))))))
 
 (define (prepare-range parts content from to)
