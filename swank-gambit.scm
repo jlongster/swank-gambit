@@ -10,7 +10,7 @@
 ;;;============================================================================
 
 (include "~~lib/_gambit#.scm")
-(include "Sort.scm")
+(include "sort.scm")
 
 (macro-readtable-escape-ctrl-chars?-set! ##main-readtable #f)
 
@@ -118,7 +118,7 @@
     (write-substring obj-str 0 (string-length obj-str))
     (force-output)))
 
-(define swank-wire-protocol-version 'nil)
+(define swank-wire-protocol-version "2010-07-06")
 
 (define (swank-process-request req)
   (debug (list 'emacs==> req))
@@ -193,7 +193,7 @@
     :lisp-implementation (:name "gambit" :type "Gambit" :version ,(system-version-string))
     :machine (:instance ,(host-name) :type ,(system-type-string))
     :features ()
-    :modules swank-modules
+    :modules ,swank-modules
     :package (:name "#package-name#" :prompt "")
     :version ,swank-wire-protocol-version))
 
@@ -206,7 +206,7 @@
               (load (append-strings
                      (list (substring
                             colon-filename
-                            1
+                            0
                             (string-length colon-filename))
                            ".scm")))))
         (loop (cdr modules))))
