@@ -179,6 +179,8 @@
 
 (define swank-modules '())
 
+(define swank-supported-modules '(:swank-presentations))
+
 (define (swank:connection-info)
 
   #;
@@ -201,7 +203,8 @@
 
   (let loop ([modules (if (list? modules) modules (list modules))])
     (if (car modules)
-        (if (not (member (car modules) swank-modules))
+        (if (and (not (member (car modules) swank-modules))
+                 (member (car modules) swank-supported-modules))
             (let ((colon-filename (object->string (car modules))))
               (load (append-strings
                      (list (substring
