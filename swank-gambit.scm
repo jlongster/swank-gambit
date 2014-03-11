@@ -10,7 +10,7 @@
 ;;;============================================================================
 
 (include "~~lib/_gambit#.scm")
-(include "Sort.scm")
+(include "sort.scm")
 
 (macro-readtable-escape-ctrl-chars?-set! ##main-readtable #f)
 
@@ -20,6 +20,7 @@
   (if SWANK-DEBUG
       (pp msg)))
 
+(define *console-out* (current-output-port))
 ;;; ===========================================================================
 
 (define (unfold p f g seed . maybe-tail-gen)
@@ -118,7 +119,7 @@
     (write-substring obj-str 0 (string-length obj-str))
     (force-output)))
 
-(define swank-wire-protocol-version 'nil)
+(define swank-wire-protocol-version "2013-02-13")
 
 (define (swank-process-request req)
   (debug (list 'emacs==> req))
@@ -193,12 +194,12 @@
     :lisp-implementation (:name "gambit" :type "Gambit" :version ,(system-version-string))
     :machine (:instance ,(host-name) :type ,(system-type-string))
     :features ()
-    :modules swank-modules
+    :modules ,swank-modules
     :package (:name "#package-name#" :prompt "")
-    :version ,swank-wire-protocol-version))
+    :version ,swank-wire-protocol-version
+    :encoding (:coding-systems ("utf-8-unix"))))
 
 (define (swank:swank-require modules)
-
   (let loop ([modules (if (list? modules) modules (list modules))])
     (if (car modules)
         (if (not (member (car modules) swank-modules))
@@ -213,7 +214,7 @@
 
   swank-modules)
 
-(define (swank:create-repl arg)
+(define (swank:create-repl arg #!rest others)
   ;; fake it
   `("???" ""))
 
@@ -465,7 +466,7 @@
           '())))
 
   (let ((strings (apply append (map f (all-symbols)))))
-    (list (sort strings string<?)
+    (list (sort-list strings string<?)
 	  (longest-common-prefix strings))))
 
 (define (longest-common-prefix strings)
