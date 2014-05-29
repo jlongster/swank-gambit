@@ -1082,6 +1082,9 @@
 (define (frame-var-value frame var)
   'nil)
 
+(define (swank:autodoc forms . args)
+  '(:not-available t))
+
 ;;;============================================================================
 
 (define-macro (swank-define-op proc-name)
@@ -1171,7 +1174,7 @@
 ;(swank-define-op swank:apropos-list-for-emacs)
 ;(swank-define-op swank:arglist-for-insertion)
 ;(swank-define-op swank:arglist-string)
-;(swank-define-op swank:autodoc)
+(swank-define-op swank:autodoc)
 ;(swank-define-op swank:describe-definition)
 ;(swank-define-op swank:describe-definition-for-emacs)
 ;(swank-define-op swank:describe-function)
