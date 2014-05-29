@@ -1,6 +1,6 @@
 ;;;============================================================================
 
-;;; Copyright (c) 2009-2010 by Marc Feeley, James Long, and Julian
+;;; Copyright (c) 2009-2011 by Marc Feeley, James Long, and Julian
 ;;; Scheid.  All Rights Reserved.
 
 ;;; This software is released under a dual LGPL and Apache 2 license.
@@ -10,11 +10,11 @@
 ;;;============================================================================
 
 (include "~~lib/_gambit#.scm")
-(include "Sort.scm")
+(include "sort.scm")
 
 (macro-readtable-escape-ctrl-chars?-set! ##main-readtable #f)
 
-(define SWANK-DEBUG #f)
+(define SWANK-DEBUG #t)
 
 (define (debug msg)
   (if SWANK-DEBUG
@@ -118,7 +118,7 @@
     (write-substring obj-str 0 (string-length obj-str))
     (force-output)))
 
-(define swank-wire-protocol-version 'nil)
+(define swank-wire-protocol-version "2011-12-06")
 
 (define (swank-process-request req)
   (debug (list 'emacs==> req))
@@ -179,6 +179,8 @@
 
 (define swank-modules '())
 
+(define swank-supported-modules '(:swank-presentations))
+
 (define (swank:connection-info)
 
   #;
@@ -193,29 +195,35 @@
     :lisp-implementation (:name "gambit" :type "Gambit" :version ,(system-version-string))
     :machine (:instance ,(host-name) :type ,(system-type-string))
     :features ()
-    :modules swank-modules
+    :modules ,swank-modules
     :package (:name "#package-name#" :prompt "")
-    :version ,swank-wire-protocol-version))
+    :version ,swank-wire-protocol-version
+    :encoding (:coding-systems ("iso-latin-1-unix"))))
 
 (define (swank:swank-require modules)
 
   (let loop ([modules (if (list? modules) modules (list modules))])
     (if (car modules)
-        (if (not (member (car modules) swank-modules))
+        (if (and (not (member (car modules) swank-modules))
+                 (member (car modules) swank-supported-modules))
             (let ((colon-filename (object->string (car modules))))
               (load (append-strings
                      (list (substring
                             colon-filename
-                            1
+                            0
                             (string-length colon-filename))
                            ".scm")))))
         (loop (cdr modules))))
 
   swank-modules)
 
-(define (swank:create-repl arg)
-  ;; fake it
-  `("???" ""))
+(define (swank:create-repl . args)
+  ;; for now, just reuse the primordial thread
+  (let* ((thread
+          (macro-primordial-thread))
+         (id
+          (object->string thread)))
+    `(,id "gambit")))
 
 (define (swank:arglist-for-echo-area . rest)
   ;; fake it
@@ -234,6 +242,7 @@
       result)))
 
 (define (send-repl-results values)
+
   (define (f value)
     (let ((result-str (object->string value)))
       (swank-write `(:write-string ,result-str :repl-result))
@@ -372,10 +381,6 @@
                                              (thread-thread-group t)
                                              (thread-specific t)))))
                threads))))
-
-(define (swank:quit-thread-browser)
-  (set! swank-threads (make-table test: eq? weak-keys: #t))
-  'nil)
 
 (define (swank:quit-thread-browser)
   (set! swank-threads (make-table test: eq? weak-keys: #t))
@@ -778,6 +783,26 @@
 
 ;;;============================================================================
 
+(define (swank:operator-arglist op repl)
+  (let* ((sym (string->symbol op))
+         (arglist (assq sym operator-db)))
+    (or arglist
+        'nil)))
+
+(define operator-db
+  '((expt x y)
+    (car pair)
+    (cdr pair)
+    (lambda (var ...) body)
+    (let ((var val) ...) body)
+    ;; etc...
+    ))
+
+(define (swank:emacs-interrupt arg)
+  (##thread-interrupt! (macro-primordial-thread)))
+
+;;;============================================================================
+
 ;;;; Inspector
 
 ;; Notes:
@@ -1099,6 +1124,8 @@
 (swank-define-op swank:inspector-reinspect)
 (swank-define-op swank:pprint-inspector-part)
 (swank-define-op swank:find-source-location-for-emacs)
+(swank-define-op swank:operator-arglist)
+(swank-define-op swank:emacs-interrupt)
 
 ;; Not yet implemented
 ;;
@@ -1200,7 +1227,6 @@
 ;(swank-define-op swank:io-speed-test)
 ;(swank-define-op swank:list-asdf-systems)
 ;(swank-define-op swank:operate-on-system-for-emacs)
-;(swank-define-op swank:operator-arglist)
 ;(swank-define-op swank:package)
 ;(swank-define-op swank:parse-package)
 ;(swank-define-op swank:print-indentation-lossage)
