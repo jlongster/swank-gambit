@@ -1254,11 +1254,11 @@
 
 ;;;============================================================================
 
-(swank-server-register!)
+;(swank-server-register!)
 
 ;;(##repl-debug-main)
 
 ;; Run until interrupt from user
-(thread-sleep! +inf.0)
+;(thread-sleep! +inf.0)
 
 ;;;============================================================================
