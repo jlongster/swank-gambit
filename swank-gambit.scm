@@ -1096,6 +1096,10 @@
 (define (swank:autodoc forms . args)
   '(:not-available t))
 
+;; don't think we need this and causes occasional slowdown
+(define (swank:buffer-first-change filename)
+  '(:not-available t))
+
 (define (nth lst n)
   (if (and (not (null? lst)) (equal? n 1))
       (car lst)
@@ -1223,7 +1227,7 @@
 
 ;; Misc
 
-;(swank-define-op swank:buffer-first-change)
+(swank-define-op swank:buffer-first-change)
 ;(swank-define-op swank:close-connection)
 ;(swank-define-op swank:commit-edited-value)
 ;(swank-define-op swank:compile-file-for-emacs)
