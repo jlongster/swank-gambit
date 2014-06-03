@@ -330,14 +330,24 @@
 (define (swank:load-file filename)
   (load filename))
 
+;; if the server is running from gsc we compile the string into an obj file and load it,
+;; otherwise the compiler isn't available so we just load the string into the interpreter
+;; TODO: test if compiler works in xcompiling environment
 (define (swank:compile-string-for-emacs string buffer position filename policy)
+  
   (define (temp-scm-file)
     (let ((n (time->seconds (current-time))))
       (string-append (object->string n) ".scm")))
+  
   (let ((tmpfile (temp-scm-file)))
     (with-output-to-file tmpfile
       (lambda () (print string)))
-    (load tmpfile)
+
+    (if (running-compiler?)
+        (let ((objfile (compile-file tmpfile)))
+          (load objfile)
+          (delete-file objfile))
+        (load tmpfile))
     (delete-file tmpfile))
   '(:return (:ok nil)))
 
@@ -1103,7 +1113,13 @@
 (define (nth lst n)
   (if (and (not (null? lst)) (equal? n 1))
       (car lst)
-      (nth (cdr lst) (- n 1))))      
+      (nth (cdr lst) (- n 1))))
+
+;; are we running the compiler or interpreter?
+(define (running-compiler?)
+  (with-exception-handler
+   (lambda (e) #f)
+   (lambda () compile-file)))
 
 ;;;============================================================================
 
