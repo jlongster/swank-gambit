@@ -491,7 +491,7 @@
           '())))
 
   (let ((strings (apply append (map f (all-symbols)))))
-    (list (sort strings string<?)
+    (list (sort-list strings string<?)
 	  (longest-common-prefix strings))))
 
 (define (longest-common-prefix strings)
