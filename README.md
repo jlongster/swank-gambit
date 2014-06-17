@@ -11,7 +11,10 @@ To setup a barebones SLIME session in Emacs:
 
 From the command line:
 ```sh
-$ gsi swank-gambit.scm
+$ gsi 
+...
+> (load "swank-gambit.scm")
+> (swank-server-register!)
 ```
 
 In Emacs:

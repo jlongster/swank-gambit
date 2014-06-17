@@ -20,7 +20,6 @@
   (if SWANK-DEBUG
       (pp msg)))
 
-(define *console-out* (current-output-port))
 ;;; ===========================================================================
 
 (define (unfold p f g seed . maybe-tail-gen)
@@ -202,6 +201,7 @@
     :encoding (:coding-systems ("iso-latin-1-unix"))))
 
 (define (swank:swank-require modules)
+
   (let loop ([modules (if (list? modules) modules (list modules))])
     (if (car modules)
         (if (and (not (member (car modules) swank-modules))
