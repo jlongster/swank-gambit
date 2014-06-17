@@ -20,6 +20,7 @@
   (if SWANK-DEBUG
       (pp msg)))
 
+(define *console-out* (current-output-port))
 ;;; ===========================================================================
 
 (define (unfold p f g seed . maybe-tail-gen)
@@ -118,7 +119,7 @@
     (write-substring obj-str 0 (string-length obj-str))
     (force-output)))
 
-(define swank-wire-protocol-version "2010-07-06")
+(define swank-wire-protocol-version "2013-02-13")
 
 (define (swank-process-request req)
   (debug (list 'emacs==> req))
@@ -197,10 +198,10 @@
     :features ()
     :modules ,swank-modules
     :package (:name "#package-name#" :prompt "")
-    :version ,swank-wire-protocol-version))
+    :version ,swank-wire-protocol-version
+    :encoding (:coding-systems ("utf-8-unix"))))
 
 (define (swank:swank-require modules)
-
   (let loop ([modules (if (list? modules) modules (list modules))])
     (if (car modules)
         (if (and (not (member (car modules) swank-modules))
@@ -216,7 +217,7 @@
 
   swank-modules)
 
-(define (swank:create-repl arg)
+(define (swank:create-repl arg #!rest others)
   ;; fake it
   `("???" ""))
 
@@ -464,7 +465,7 @@
           '())))
 
   (let ((strings (apply append (map f (all-symbols)))))
-    (list (sort strings string<?)
+    (list (sort-list strings string<?)
 	  (longest-common-prefix strings))))
 
 (define (longest-common-prefix strings)
