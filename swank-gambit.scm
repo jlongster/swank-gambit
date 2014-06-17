@@ -1,6 +1,6 @@
 ;;;============================================================================
 
-;;; Copyright (c) 2009-2010 by Marc Feeley, James Long, and Julian
+;;; Copyright (c) 2009-2011 by Marc Feeley, James Long, and Julian
 ;;; Scheid.  All Rights Reserved.
 
 ;;; This software is released under a dual LGPL and Apache 2 license.
@@ -14,7 +14,7 @@
 
 (macro-readtable-escape-ctrl-chars?-set! ##main-readtable #f)
 
-(define SWANK-DEBUG #f)
+(define SWANK-DEBUG #t)
 
 (define (debug msg)
   (if SWANK-DEBUG
@@ -199,7 +199,7 @@
     :modules ,swank-modules
     :package (:name "#package-name#" :prompt "")
     :version ,swank-wire-protocol-version
-    :encoding (:coding-systems ("utf-8-unix"))))
+    :encoding (:coding-systems ("iso-latin-1-unix"))))
 
 (define (swank:swank-require modules)
   (let loop ([modules (if (list? modules) modules (list modules))])
@@ -217,9 +217,13 @@
 
   swank-modules)
 
-(define (swank:create-repl arg #!rest others)
-  ;; fake it
-  `("???" ""))
+(define (swank:create-repl . args)
+  ;; for now, just reuse the primordial thread
+  (let* ((thread
+          (macro-primordial-thread))
+         (id
+          (object->string thread)))
+    `(,id "gambit")))
 
 (define (swank:arglist-for-echo-area . rest)
   ;; fake it
@@ -238,6 +242,7 @@
       result)))
 
 (define (send-repl-results values)
+
   (define (f value)
     (let ((result-str (object->string value)))
       (swank-write `(:write-string ,result-str :repl-result))
@@ -778,6 +783,26 @@
 
 ;;;============================================================================
 
+(define (swank:operator-arglist op repl)
+  (let* ((sym (string->symbol op))
+         (arglist (assq sym operator-db)))
+    (or arglist
+        'nil)))
+
+(define operator-db
+  '((expt x y)
+    (car pair)
+    (cdr pair)
+    (lambda (var ...) body)
+    (let ((var val) ...) body)
+    ;; etc...
+    ))
+
+(define (swank:emacs-interrupt arg)
+  (##thread-interrupt! (macro-primordial-thread)))
+
+;;;============================================================================
+
 ;;;; Inspector
 
 ;; Notes:
@@ -1057,6 +1082,9 @@
 (define (frame-var-value frame var)
   'nil)
 
+(define (swank:autodoc forms . args)
+  '(:not-available t))
+
 ;;;============================================================================
 
 (define-macro (swank-define-op proc-name)
@@ -1099,6 +1127,8 @@
 (swank-define-op swank:inspector-reinspect)
 (swank-define-op swank:pprint-inspector-part)
 (swank-define-op swank:find-source-location-for-emacs)
+(swank-define-op swank:operator-arglist)
+(swank-define-op swank:emacs-interrupt)
 
 ;; Not yet implemented
 ;;
@@ -1144,7 +1174,7 @@
 ;(swank-define-op swank:apropos-list-for-emacs)
 ;(swank-define-op swank:arglist-for-insertion)
 ;(swank-define-op swank:arglist-string)
-;(swank-define-op swank:autodoc)
+(swank-define-op swank:autodoc)
 ;(swank-define-op swank:describe-definition)
 ;(swank-define-op swank:describe-definition-for-emacs)
 ;(swank-define-op swank:describe-function)
@@ -1200,7 +1230,6 @@
 ;(swank-define-op swank:io-speed-test)
 ;(swank-define-op swank:list-asdf-systems)
 ;(swank-define-op swank:operate-on-system-for-emacs)
-;(swank-define-op swank:operator-arglist)
 ;(swank-define-op swank:package)
 ;(swank-define-op swank:parse-package)
 ;(swank-define-op swank:print-indentation-lossage)
