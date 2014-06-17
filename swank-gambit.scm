@@ -330,6 +330,27 @@
 (define (swank:load-file filename)
   (load filename))
 
+;; if the server is running from gsc we compile the string into an obj file and load it,
+;; otherwise the compiler isn't available so we just load the string into the interpreter
+;; TODO: test if compiler works in xcompiling environment
+(define (swank:compile-string-for-emacs string buffer position filename policy)
+  
+  (define (temp-scm-file)
+    (let ((n (time->seconds (current-time))))
+      (string-append (object->string n) ".scm")))
+  
+  (let ((tmpfile (temp-scm-file)))
+    (with-output-to-file tmpfile
+      (lambda () (print string)))
+
+    (if (running-compiler?)
+        (let ((objfile (compile-file tmpfile)))
+          (load objfile)
+          (delete-file objfile))
+        (load tmpfile))
+    (delete-file tmpfile))
+  '(:return (:ok nil)))
+
 (define swank-server-portnum 4005)
 
 (define (swank:start-swank-server-in-thread id filename)
@@ -1075,7 +1096,7 @@
    ((eq? ':string (car spec))
     (eval (read-from-string (nth spec 1))))
    ((eq? ':inspector (car spec))
-    (inspector-nth-part (nth spec 1)))
+    (swank:inspector-nth-part (nth spec 1)))
    ((eq? ':sldb (car spec))
     (frame-var-value (nth spec 1) (nth spec 2)))))
 
@@ -1084,6 +1105,21 @@
 
 (define (swank:autodoc forms . args)
   '(:not-available t))
+
+;; don't think we need this and causes occasional slowdown
+(define (swank:buffer-first-change filename)
+  '(:not-available t))
+
+(define (nth lst n)
+  (if (and (not (null? lst)) (equal? n 1))
+      (car lst)
+      (nth (cdr lst) (- n 1))))
+
+;; are we running the compiler or interpreter?
+(define (running-compiler?)
+  (with-exception-handler
+   (lambda (e) #f)
+   (lambda () compile-file)))
 
 ;;;============================================================================
 
@@ -1207,13 +1243,13 @@
 
 ;; Misc
 
-;(swank-define-op swank:buffer-first-change)
+(swank-define-op swank:buffer-first-change)
 ;(swank-define-op swank:close-connection)
 ;(swank-define-op swank:commit-edited-value)
 ;(swank-define-op swank:compile-file-for-emacs)
 ;(swank-define-op swank:compile-file-if-needed)
 ;(swank-define-op swank:compile-multiple-strings-for-emacs)
-;(swank-define-op swank:compile-string-for-emacs)
+(swank-define-op swank:compile-string-for-emacs)
 ;(swank-define-op swank:compiler-condition)
 ;(swank-define-op swank:create-listener)
 ;(swank-define-op swank:create-server)
@@ -1254,11 +1290,11 @@
 
 ;;;============================================================================
 
-(swank-server-register!)
+;(swank-server-register!)
 
 ;;(##repl-debug-main)
 
 ;; Run until interrupt from user
-(thread-sleep! +inf.0)
+;(thread-sleep! +inf.0)
 
 ;;;============================================================================
