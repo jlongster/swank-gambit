@@ -119,7 +119,7 @@
     (write-substring obj-str 0 (string-length obj-str))
     (force-output)))
 
-(define swank-wire-protocol-version "2013-02-13")
+(define swank-wire-protocol-version "2014-05-16")
 
 (define (swank-process-request req)
   (debug (list 'emacs==> req))
