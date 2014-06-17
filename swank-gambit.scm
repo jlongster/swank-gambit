@@ -1,6 +1,6 @@
 ;;;============================================================================
 
-;;; Copyright (c) 2009-2010 by Marc Feeley, James Long, and Julian
+;;; Copyright (c) 2009-2011 by Marc Feeley, James Long, and Julian
 ;;; Scheid.  All Rights Reserved.
 
 ;;; This software is released under a dual LGPL and Apache 2 license.
@@ -10,11 +10,11 @@
 ;;;============================================================================
 
 (include "~~lib/_gambit#.scm")
-(include "Sort.scm")
+(include "sort.scm")
 
 (macro-readtable-escape-ctrl-chars?-set! ##main-readtable #f)
 
-(define SWANK-DEBUG #f)
+(define SWANK-DEBUG #t)
 
 (define (debug msg)
   (if SWANK-DEBUG
@@ -118,7 +118,7 @@
     (write-substring obj-str 0 (string-length obj-str))
     (force-output)))
 
-(define swank-wire-protocol-version 'nil)
+(define swank-wire-protocol-version "2014-05-16")
 
 (define (swank-process-request req)
   (debug (list 'emacs==> req))
@@ -179,6 +179,8 @@
 
 (define swank-modules '())
 
+(define swank-supported-modules '(:swank-presentations))
+
 (define (swank:connection-info)
 
   #;
@@ -193,29 +195,35 @@
     :lisp-implementation (:name "gambit" :type "Gambit" :version ,(system-version-string))
     :machine (:instance ,(host-name) :type ,(system-type-string))
     :features ()
-    :modules swank-modules
+    :modules ,swank-modules
     :package (:name "#package-name#" :prompt "")
-    :version ,swank-wire-protocol-version))
+    :version ,swank-wire-protocol-version
+    :encoding (:coding-systems ("iso-latin-1-unix"))))
 
 (define (swank:swank-require modules)
 
   (let loop ([modules (if (list? modules) modules (list modules))])
     (if (car modules)
-        (if (not (member (car modules) swank-modules))
+        (if (and (not (member (car modules) swank-modules))
+                 (member (car modules) swank-supported-modules))
             (let ((colon-filename (object->string (car modules))))
               (load (append-strings
                      (list (substring
                             colon-filename
-                            1
+                            0
                             (string-length colon-filename))
                            ".scm")))))
         (loop (cdr modules))))
 
   swank-modules)
 
-(define (swank:create-repl arg)
-  ;; fake it
-  `("???" ""))
+(define (swank:create-repl . args)
+  ;; for now, just reuse the primordial thread
+  (let* ((thread
+          (macro-primordial-thread))
+         (id
+          (object->string thread)))
+    `(,id "gambit")))
 
 (define (swank:arglist-for-echo-area . rest)
   ;; fake it
@@ -234,6 +242,7 @@
       result)))
 
 (define (send-repl-results values)
+
   (define (f value)
     (let ((result-str (object->string value)))
       (swank-write `(:write-string ,result-str :repl-result))
@@ -321,6 +330,27 @@
 (define (swank:load-file filename)
   (load filename))
 
+;; if the server is running from gsc we compile the string into an obj file and load it,
+;; otherwise the compiler isn't available so we just load the string into the interpreter
+;; TODO: test if compiler works in xcompiling environment
+(define (swank:compile-string-for-emacs string buffer position filename policy)
+  
+  (define (temp-scm-file)
+    (let ((n (time->seconds (current-time))))
+      (string-append (object->string n) ".scm")))
+  
+  (let ((tmpfile (temp-scm-file)))
+    (with-output-to-file tmpfile
+      (lambda () (print string)))
+
+    (if (running-compiler?)
+        (let ((objfile (compile-file tmpfile)))
+          (load objfile)
+          (delete-file objfile))
+        (load tmpfile))
+    (delete-file tmpfile))
+  '(:return (:ok nil)))
+
 (define swank-server-portnum 4005)
 
 (define (swank:start-swank-server-in-thread id filename)
@@ -372,10 +402,6 @@
                                              (thread-thread-group t)
                                              (thread-specific t)))))
                threads))))
-
-(define (swank:quit-thread-browser)
-  (set! swank-threads (make-table test: eq? weak-keys: #t))
-  'nil)
 
 (define (swank:quit-thread-browser)
   (set! swank-threads (make-table test: eq? weak-keys: #t))
@@ -465,7 +491,7 @@
           '())))
 
   (let ((strings (apply append (map f (all-symbols)))))
-    (list (sort strings string<?)
+    (list (sort-list strings string<?)
 	  (longest-common-prefix strings))))
 
 (define (longest-common-prefix strings)
@@ -778,6 +804,26 @@
 
 ;;;============================================================================
 
+(define (swank:operator-arglist op repl)
+  (let* ((sym (string->symbol op))
+         (arglist (assq sym operator-db)))
+    (or arglist
+        'nil)))
+
+(define operator-db
+  '((expt x y)
+    (car pair)
+    (cdr pair)
+    (lambda (var ...) body)
+    (let ((var val) ...) body)
+    ;; etc...
+    ))
+
+(define (swank:emacs-interrupt arg)
+  (##thread-interrupt! (macro-primordial-thread)))
+
+;;;============================================================================
+
 ;;;; Inspector
 
 ;; Notes:
@@ -1050,12 +1096,30 @@
    ((eq? ':string (car spec))
     (eval (read-from-string (nth spec 1))))
    ((eq? ':inspector (car spec))
-    (inspector-nth-part (nth spec 1)))
+    (swank:inspector-nth-part (nth spec 1)))
    ((eq? ':sldb (car spec))
     (frame-var-value (nth spec 1) (nth spec 2)))))
 
 (define (frame-var-value frame var)
   'nil)
+
+(define (swank:autodoc forms . args)
+  '(:not-available t))
+
+;; don't think we need this and causes occasional slowdown
+(define (swank:buffer-first-change filename)
+  '(:not-available t))
+
+(define (nth lst n)
+  (if (and (not (null? lst)) (equal? n 1))
+      (car lst)
+      (nth (cdr lst) (- n 1))))
+
+;; are we running the compiler or interpreter?
+(define (running-compiler?)
+  (with-exception-handler
+   (lambda (e) #f)
+   (lambda () compile-file)))
 
 ;;;============================================================================
 
@@ -1099,6 +1163,8 @@
 (swank-define-op swank:inspector-reinspect)
 (swank-define-op swank:pprint-inspector-part)
 (swank-define-op swank:find-source-location-for-emacs)
+(swank-define-op swank:operator-arglist)
+(swank-define-op swank:emacs-interrupt)
 
 ;; Not yet implemented
 ;;
@@ -1144,7 +1210,7 @@
 ;(swank-define-op swank:apropos-list-for-emacs)
 ;(swank-define-op swank:arglist-for-insertion)
 ;(swank-define-op swank:arglist-string)
-;(swank-define-op swank:autodoc)
+(swank-define-op swank:autodoc)
 ;(swank-define-op swank:describe-definition)
 ;(swank-define-op swank:describe-definition-for-emacs)
 ;(swank-define-op swank:describe-function)
@@ -1177,13 +1243,13 @@
 
 ;; Misc
 
-;(swank-define-op swank:buffer-first-change)
+(swank-define-op swank:buffer-first-change)
 ;(swank-define-op swank:close-connection)
 ;(swank-define-op swank:commit-edited-value)
 ;(swank-define-op swank:compile-file-for-emacs)
 ;(swank-define-op swank:compile-file-if-needed)
 ;(swank-define-op swank:compile-multiple-strings-for-emacs)
-;(swank-define-op swank:compile-string-for-emacs)
+(swank-define-op swank:compile-string-for-emacs)
 ;(swank-define-op swank:compiler-condition)
 ;(swank-define-op swank:create-listener)
 ;(swank-define-op swank:create-server)
@@ -1200,7 +1266,6 @@
 ;(swank-define-op swank:io-speed-test)
 ;(swank-define-op swank:list-asdf-systems)
 ;(swank-define-op swank:operate-on-system-for-emacs)
-;(swank-define-op swank:operator-arglist)
 ;(swank-define-op swank:package)
 ;(swank-define-op swank:parse-package)
 ;(swank-define-op swank:print-indentation-lossage)
@@ -1225,11 +1290,11 @@
 
 ;;;============================================================================
 
-(swank-server-register!)
+;(swank-server-register!)
 
 ;;(##repl-debug-main)
 
 ;; Run until interrupt from user
-(thread-sleep! +inf.0)
+;(thread-sleep! +inf.0)
 
 ;;;============================================================================

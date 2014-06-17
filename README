@@ -1,9 +1,0 @@
-
-This is an initial version of a Gambit Scheme swank backend for SLIME.
-
-Make sure to setup SLIME in Emacs:
-
-(require 'slime)
-(slime-setup '(slime-repl))
-
-Run swank-gambit.scm from the command line, and then type `M-x slime-connect ENT ENT ENT` to get a SLIME prompt.
