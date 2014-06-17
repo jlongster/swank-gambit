@@ -1,6 +1,6 @@
-#swank-gambit
+###swank-gambit
 
-##A [Gambit](http://gambitscheme.org/) Scheme backend for [SLIME](http://common-lisp.net/project/slime).
+**A [Gambit](http://gambitscheme.org/) Scheme backend for [SLIME](http://common-lisp.net/project/slime).**
 
 To setup a barebones SLIME session in Emacs:
 ```elisp
@@ -10,11 +10,11 @@ To setup a barebones SLIME session in Emacs:
 
 From the command line:
 ```sh
-gsi swank-gambit.scm
+$ gsi swank-gambit.scm
 ```
 
 In Emacs:
 ```elisp
-M-x slime-connect ENT ENT ENT
+M-x slime-connect
 ```
 
